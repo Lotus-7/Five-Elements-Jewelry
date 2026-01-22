@@ -3,11 +3,12 @@ import { motion } from "framer-motion";
 
 export default function InputForm({ onSubmit }) {
   const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (date) {
-      onSubmit(date);
+      onSubmit(date, time);
     }
   };
 
@@ -38,6 +39,21 @@ export default function InputForm({ onSubmit }) {
             required
             className="w-full px-4 py-3 bg-paper border-b border-stone-300 focus:border-ink focus:outline-none text-center font-serif text-lg text-ink transition-colors rounded-t-lg"
           />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm font-serif text-stone-600 text-center tracking-wider">
+            出生时辰 (选填)
+          </label>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className="w-full px-4 py-3 bg-paper border-b border-stone-300 focus:border-ink focus:outline-none text-center font-serif text-lg text-ink transition-colors rounded-t-lg"
+          />
+          <p className="text-[10px] text-center text-stone-400">
+            填写时辰可获得更精准的能量建议
+          </p>
         </div>
 
         <button

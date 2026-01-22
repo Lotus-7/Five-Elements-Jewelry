@@ -6,8 +6,8 @@ import { getDailyRecommendation } from "./utils/fiveElements";
 function App() {
   const [result, setResult] = useState(null);
 
-  const handleCalculate = (dateStr) => {
-    const data = getDailyRecommendation(dateStr);
+  const handleCalculate = (dateStr, timeStr) => {
+    const data = getDailyRecommendation(dateStr, timeStr);
     setResult(data);
   };
 
