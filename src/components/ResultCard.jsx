@@ -2,6 +2,7 @@ import React, { useRef } from "react";
 import { motion } from "framer-motion";
 import { RefreshCcw, Share2, Download } from "lucide-react";
 import html2canvas from "html2canvas";
+import InteractiveJewelry from "./InteractiveJewelry";
 
 export default function ResultCard({ data, onReset }) {
   const { user, today, recommendation } = data;
@@ -20,7 +21,7 @@ export default function ResultCard({ data, onReset }) {
     if (!cardRef.current) return;
 
     try {
-      // 颜色转换辅助函数：将 hex + alpha (e.g., #CD453266) 转为 rgba
+      // 颜色转换辅助函数：将 hex + alpha (例如 #CD453266) 转为 rgba，提高 canvas 渲染兼容性
       const hexToRgba = (hex, alpha = 0.4) => {
         if (!hex) return "rgba(0,0,0,0.1)";
         const r = parseInt(hex.slice(1, 3), 16);
@@ -29,20 +30,27 @@ export default function ResultCard({ data, onReset }) {
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
       };
 
+      // 获取元素的当前视口尺寸，确保截图精确度
+      const rect = cardRef.current.getBoundingClientRect();
+
       const canvas = await html2canvas(cardRef.current, {
-        backgroundColor: "#ffffff",
-        scale: 3,
+        backgroundColor: null, // 设置为 null，保留 transparent 透明背景，保证圆角过渡平滑无白边
+        scale: 3, // 3倍缩放，确保导出图片的高清质感
         logging: false,
-        useCORS: true,
+        useCORS: true, // 启用跨域资源共享，防止外部图片或字体资源被污染/无法加载
         allowTaint: true,
-        scrollY: 0, // 防止滚动导致的偏移
+        scrollX: 0, // 强制 x 轴滚动归零，避免页面滚动导致截图发生位移
+        scrollY: 0, // 强制 y 轴滚动归零，避免页面滚动导致截图发生位移
+        width: rect.width, // 限制 canvas 的宽为元素的实际宽度
+        height: rect.height, // 限制 canvas 的高为元素的实际高度
         onclone: (clonedDoc) => {
           const clonedCard = clonedDoc.querySelector('[data-card-root="true"]');
           if (clonedCard) {
+            // 截图时保持完美的 24px 圆角
+            clonedCard.style.borderRadius = "24px";
             clonedCard.style.transform = "none";
-            clonedCard.style.borderRadius = "0px"; // 截图时先取消外层圆角，避免背景白边，最后由容器裁切
 
-            // 修正阴影颜色，使用纯 RGBA 提高兼容性
+            // 修正阴影颜色，使用纯 RGBA 提升 html2canvas 阴影的渲染兼容性
             const shadowColor = hexToRgba(recommendation.colorHex, 0.4);
             const centerCircle = clonedCard.querySelector(
               'div[style*="box-shadow"]',
@@ -51,23 +59,29 @@ export default function ResultCard({ data, onReset }) {
               centerCircle.style.boxShadow = `0 20px 40px -10px ${shadowColor}`;
             }
 
-            // 修正字体间距 (canvas 渲染 tracking 会偏大)
+            // 修正字体间距 (canvas 渲染 letter-spacing 有时会偏大，进行合理折减)
             const wideText = clonedCard.querySelectorAll(
               '[class*="tracking-"]',
             );
             wideText.forEach((el) => {
               const currentTracking = window.getComputedStyle(el).letterSpacing;
               if (currentTracking && currentTracking !== "normal") {
-                // 减半字间距
                 const val = parseFloat(currentTracking);
                 el.style.letterSpacing = `${val * 0.5}px`;
               }
             });
 
-            // 清理 Framer Motion
-            const motionDivs = clonedCard.querySelectorAll("div");
-            motionDivs.forEach((div) => {
-              if (div.style.transform) div.style.transform = "none";
+            // 彻底清理克隆 DOM 中所有的 Framer Motion 临时动画状态，防止截图截到动画播到一半的半透明或缩放状态
+            const allClonedEl = clonedCard.querySelectorAll("*");
+            allClonedEl.forEach((el) => {
+              // 强制清除 transform 位移和缩放
+              if (el.style.transform && el.style.transform !== "none") {
+                el.style.transform = "none";
+              }
+              // 强制不透明度为 100%，防止渐入动画未播放完毕导致截图卡片半透明
+              if (el.style.opacity && el.style.opacity !== "1") {
+                el.style.opacity = "1";
+              }
             });
           }
         },
@@ -111,25 +125,11 @@ export default function ResultCard({ data, onReset }) {
             </p>
           </div>
 
-          {/* 核心视觉：色块/五行 */}
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.3, duration: 1 }}
-            className="w-48 h-48 rounded-full flex items-center justify-center relative my-4"
-            style={{
-              backgroundColor: recommendation.colorHex,
-              boxShadow: `0 20px 40px -10px ${recommendation.colorHex}66`,
-            }}
-          >
-            <div className="absolute inset-2 border border-white/20 rounded-full" />
-            <div className="text-white font-serif flex flex-col items-center">
-              <span className="text-5xl mb-2">{recommendation.element}</span>
-              <span className="text-xs tracking-[0.3em] opacity-80 uppercase">
-                {recommendation.materials[0]}
-              </span>
-            </div>
-          </motion.div>
+          {/* 核心视觉：3D感悬浮 SVG 珠宝展示 */}
+          <InteractiveJewelry
+            element={recommendation.element}
+            colorHex={recommendation.colorHex}
+          />
 
           {/* 推荐标题 */}
           <div className="space-y-3">
@@ -151,45 +151,68 @@ export default function ResultCard({ data, onReset }) {
             </div>
           </div>
 
-          {/* 推荐语 */}
-          <div className="relative px-6 py-6 bg-paper/50 rounded-xl w-full">
-            <p className="text-sm font-serif text-stone-700 leading-loose text-justify">
-              <span className="text-2xl float-left mr-1 text-stone-300">“</span>
+          {/* 推荐语：采用绝对定位的双引号代替 float，确保 html2canvas 渲染时不会发生文字重叠或遮挡 */}
+          <div className="relative px-8 py-6 bg-paper/50 rounded-xl w-full">
+            <span className="absolute top-2 left-3 text-4xl text-stone-300 font-serif leading-none">“</span>
+            <p className="text-sm font-serif text-stone-700 leading-loose text-justify px-2">
               {recommendation.reason}
-              <span className="text-2xl float-right ml-1 text-stone-300">
-                ”
-              </span>
             </p>
+            <span className="absolute bottom-2 right-3 text-4xl text-stone-300 font-serif leading-none">”</span>
           </div>
 
-          {/* 底部信息：用户日主 */}
-          <div className="pt-6 border-t border-stone-100 w-full flex justify-between items-end">
-            <div className="text-left">
-              <p className="text-[10px] text-stone-400 mb-1">您的日主</p>
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-ink text-paper flex items-center justify-center text-xs font-serif">
-                  {user.dayGan}
-                </span>
-                <span className="text-xs text-stone-600 font-serif">
-                  {user.element}身
-                </span>
-                {user.hourGan && (
-                  <>
-                    <span className="w-6 h-6 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center text-xs font-serif ml-1">
-                      {user.hourGan}
-                    </span>
-                    <span className="text-xs text-stone-400 font-serif">
-                      时
-                    </span>
-                  </>
-                )}
-              </div>
+          {/* 八字命盘简析与五行能量配比（新中式风） */}
+          <div className="w-full pt-6 border-t border-stone-100 flex flex-col gap-3 text-left">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-stone-400">您的八字命盘：</span>
+              <span className="font-serif font-medium text-ink tracking-wider bg-stone-50 px-2 py-0.5 rounded border border-stone-100">
+                {user.baziText}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-stone-400">八字格局：</span>
+              <span className="font-serif text-stone-700">
+                日元【<span style={{ color: recommendation.colorHex }}>{user.dayGan}</span>】{user.element}命 · <span className="font-medium">{user.analysis.isStrong ? "身强" : "身弱"}</span>格
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-stone-400">本命喜用五行：</span>
+              <span className="font-serif px-2 py-0.5 rounded bg-stone-50 text-stone-700 font-medium border border-stone-100">
+                {user.analysis.favorableText}
+              </span>
             </div>
 
-            <div className="text-right">
-              <p className="text-[10px] text-stone-300 tracking-widest uppercase">
-                Five Elements Jewelry
-              </p>
+            {/* 五行能量分布简易色条 */}
+            <div className="mt-1 space-y-1.5">
+              <div className="text-[10px] text-stone-400 flex justify-between">
+                <span>五行能量配比：</span>
+                <span className="font-mono text-stone-500">
+                  {Object.entries(user.analysis.scores)
+                    .map(([el, score]) => `${el}${score}%`)
+                    .join(" ")}
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-stone-100 flex overflow-hidden">
+                {/* 遍历五行分数渲染比例色条 */}
+                {Object.entries(user.analysis.scores).map(([el, score]) => {
+                  const elementColorMap = {
+                    '金': '#D4AF37', // 流光金
+                    '木': '#4B6E57', // 竹青
+                    '水': '#2C3E50', // 黛蓝
+                    '火': '#CD4532', // 朱砂红
+                    '土': '#9A7D46'  // 琥珀黄
+                  };
+                  return score > 0 ? (
+                    <div
+                      key={el}
+                      style={{
+                        width: `${score}%`,
+                        backgroundColor: elementColorMap[el]
+                      }}
+                      title={`${el}: ${score}%`}
+                    />
+                  ) : null;
+                })}
+              </div>
             </div>
           </div>
         </div>
